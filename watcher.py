@@ -93,7 +93,7 @@ class OCRWatcherHandler(FileSystemEventHandler):
                     "temperature": 0.0,  # Auf 0.0 setzen für maximale deterministische Präzision
                     "top_p": 0.1
                 }
-            }, timeout=30)
+            }, timeout=120)
             
             ai_response = response.json().get("response", "").strip()
             
