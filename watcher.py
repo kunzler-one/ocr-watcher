@@ -78,8 +78,19 @@ class OCRWatcherHandler(FileSystemEventHandler):
                 input_path, temp_ocr_path
             ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
-            text_result = subprocess.run(["pdftotext", "-l", "2", temp_ocr_path, "-"], capture_output=True, text=True, check=True)
-            doc_text = text_result.stdout[:3000]
+            # 2. Text extrahieren (Optimiert für CPU: Nur Anfang und Ende)
+            text_result = subprocess.run(["pdftotext", temp_ocr_path, "-"], capture_output=True, text=True, check=True)
+            full_doc_text = text_result.stdout
+            
+            # Text zuschneiden, um CPU-Zeit bei langen Dokumenten drastisch zu sparen
+            if len(full_doc_text) > 3000:
+                print(f"-> Dokument ist lang ({len(full_doc_text)} Zeichen). Kürze Text für die KI...")
+                anfang = full_doc_text[:2000]
+                ende = full_doc_text[-1000:]
+                # Klarer Hinweis für die KI, dass hier Text ausgelassen wurde
+                doc_text = f"{anfang}\n\n[... HIER WURDEN TEILE DES MITTELTEILS AUSGELASSEN ...]\n\n{ende}"
+            else:
+                doc_text = full_doc_text
             
             # 3. KI nach Namen fragen
             print("-> Befrage KI für Namensgenerierung...")
