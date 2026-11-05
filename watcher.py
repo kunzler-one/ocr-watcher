@@ -12,11 +12,34 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434/api/generate")
 MODEL_NAME = os.getenv("MODEL_NAME", "qwen2.5:1.5b")
 
 PROMPT_TEMPLATE = """
-Analysiere den OCR-Text dieses Dokuments. Generiere einen sauberen Dateinamen im Format: YYYY-MM-DD_[Absender]_[Dokumententyp].
-Nutze das exakte Ausstellungsdatum des Dokuments. Erlaube NUR Buchstaben, Zahlen, Unterstriche und Bindestriche im Namen. 
-Antworte AUSSCHLIESSLICH mit dem nackten Dateinamen (OHNE Dateiendung, ohne Anführungszeichen, ohne Einleitung oder Erklärung).
+Du bist ein präziser Dokumenten-Analysator für ein Dateisystem. Deine Aufgabe ist es, den OCR-Text einer PDF zu lesen und strukturierte Metadaten im JSON-Format zu extrahieren.
 
-Text:
+ANLEITUNG ZUR PARAMETER-ERMITTLUNG:
+1. DATUM (Format: YYYY-MM-DD): 
+   - Suche nach dem Ausstellungsdatum, Rechnungsdatum, Leistungsdatum oder Briefdatum.
+   - Typische Signalwörter: "Datum:", "Vom:", "Rechnungsdatum:", "Leistungszeitraum:".
+   - Ignoriere das heutige Datum oder Geburtsdaten. Wenn kein Jahr gefunden wird, nutze "0000-00-00".
+
+2. ABSENDER (Maximal 2-3 prägnante Wörter):
+   - Wer hat das Dokument ausgestellt? (z.B. Vodafone, Telekom, Allianz, Finanzamt, Amazon, BMW).
+   - Suche ganz oben im Text, im Briefkopf, bei den Absenderzeilen im Adressfenster oder im Impressum.
+   - Nutze den Eigennamen der Firma oder Behörde. Keine Rechtsformen wie GmbH, AG, e.V.
+
+3. DOKUMENTENTYP (Exakt 1 Wort):
+   - Wähle den zutreffendsten Typ aus: Rechnung, Gutschrift, Vertrag, Mahnung, Kündigung, Lohnabrechnung, Versicherungsschein, Bescheid, Brief, Quittung.
+   - Falls nichts passt, nutze "Dokument".
+
+STRIKTE FORMATVORGABE:
+Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt. Verwende keine Markdown-Formatierung (keine ```json Blöcke). Keine Erklärungen vor oder nach dem JSON.
+
+Gewünschtes Ausgabeformat:
+{{
+  "datum": "YYYY-MM-DD",
+  "absender": "FIRMENNAME",
+  "typ": "TYP"
+}}
+
+Hier ist der OCR-Text des Dokuments:
 ---
 {document_text}
 ---
@@ -58,20 +81,44 @@ class OCRWatcherHandler(FileSystemEventHandler):
             text_result = subprocess.run(["pdftotext", "-l", "2", temp_ocr_path, "-"], capture_output=True, text=True, check=True)
             doc_text = text_result.stdout[:3000]
             
+            # 3. KI nach Namen fragen
             print("-> Befrage KI für Namensgenerierung...")
             prompt = PROMPT_TEMPLATE.format(document_text=doc_text)
             
             response = requests.post(OLLAMA_URL, json={
-                "model": MODEL_NAME, "prompt": prompt, "stream": False,
-                "options": {"temperature": 0.1}
+                "model": MODEL_NAME, 
+                "prompt": prompt, 
+                "stream": False,
+                "options": {
+                    "temperature": 0.0,  # Auf 0.0 setzen für maximale deterministische Präzision
+                    "top_p": 0.1
+                }
             }, timeout=30)
             
-            ai_name = response.json().get("response", "unbekannt").strip()
-            final_name = clean_filename(ai_name)
+            ai_response = response.json().get("response", "").strip()
             
+            # JSON auswerten
+            try:
+                # Falls die KI trotz Verbot Markdown-Backticks mitgeliefert hat, entfernen
+                ai_response_clean = re.sub(r'```json\s*|```', '', ai_response).strip()
+                metadata = json.loads(ai_response_clean)
+                
+                # Werte auslesen und säubern
+                doc_date = clean_filename(metadata.get("datum", "0000-00-00"))
+                doc_sender = clean_filename(metadata.get("absender", "Unbekannt"))
+                doc_type = clean_filename(metadata.get("typ", "Dokument"))
+                
+                # Zusammengesetzter Dateiname
+                final_name = f"{doc_date}_{doc_sender}_{doc_type}"
+                
+            except Exception as json_err:
+                print(f"-> Warnung: KI-Antwort war kein sauberes JSON. Nutze Fallback-Parsing. (Antwort war: {ai_response})")
+                # Fallback, falls das JSON-Parsing scheitert
+                fallback_name = clean_filename(ai_response.replace("\n", "_"))
+                final_name = fallback_name if fallback_name else "unbekanntes_dokument"
+            
+            # Zielpfad bauen
             final_path = os.path.join(self.output_dir, f"{final_name}.pdf")
-            if os.path.exists(final_path):
-                final_path = os.path.join(self.output_dir, f"{final_name}_{int(time.time())}.pdf")
             
             os.rename(temp_ocr_path, final_path)
             os.remove(input_path)
