@@ -232,17 +232,19 @@ if __name__ == "__main__":
 
 
 
-   # Initialize live real-time file system monitoring
-   print("Catch-up complete. Switching over to Live Monitoring Mode...")
-   observer = Observer()
-   for folder in watch_folders:
-      handler = OCRWatcherHandler(output_dir=folder["output"])
-      observer.schedule(handler, path=folder["input"], recursive=False)
-      print(f"Monitoring active: {folder['input']} -> {folder['output']}")
-      observer.start()
-   try:
-      while True:
-         time.sleep(1)
-   except KeyboardInterrupt:
-      observer.stop()
-      observer.join()
+    # 2. Initialize live real-time file system monitoring
+    print("Catch-up complete. Switching over to Live Monitoring Mode...")
+    observer = Observer()
+    
+    for folder in watch_folders:
+        handler = OCRWatcherHandler(output_dir=folder["output"])
+        observer.schedule(handler, path=folder["input"], recursive=False)
+        print(f"Überwache aktiv: {folder['input']} -> {folder['output']}")
+        
+    observer.start()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
