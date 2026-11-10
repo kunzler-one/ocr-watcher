@@ -17,22 +17,26 @@ API_KEY = os.getenv("API_KEY", "")
 
 # --- German Prompt Template ---
 PROMPT_TEMPLATE = """
-Du bist ein präziser Dokumenten-Analysator für ein Dateisystem. Deine Aufgabe ist es, den OCR-Text einer PDF zu lesen und strukturierte Metadaten im JSON-Format zu extrahieren.
+Du bist ein präziser Dokumenten-Analysator für ein Dateisystem. Deine Aufgabe ist es, den OCR-Text einer PDF zu lesen und strukturierte Metadaten im JSON-Format zu extrahieren um ultimativ einen Dateinamen zu generieren.
 
 ANLEITUNG ZUR PARAMETER-ERMITTLUNG:
 1. DATUM (Format: YYYY-MM-DD): 
    - Suche nach dem Ausstellungsdatum, Rechnungsdatum, Leistungsdatum oder Briefdatum.
-   - Typische Signalwörter: "Datum:", "Vom:", "Rechnungsdatum:", "Leistungszeitraum:".
-   - Ignoriere das heutige Datum oder Geburtsdaten. Wenn kein Jahr gefunden wird, nutze "0000-00-00".
+   - Typische Signalwörter: "Datum:", "Vom:", "Rechnungsdatum:", "Leistungszeitraum:", "Zum".
+   - Ignoriere Geburtsdaten (vor 2000). 
+   - Wenn kein Jahr gefunden wird, nutze das aktuelle Datum auf den Monatsanfang normalisiert (YYYY-MM-01).
 
 2. ABSENDER (Maximal 2-3 prägnante Wörter):
-   - Wer hat das Dokument ausgestellt? (z.B. Vodafone, Telekom, Allianz, Finanzamt, Amazon, BMW).
+   - Wer hat das Dokument ausgestellt? Welche Firma, welche Behörde.
    - Suche ganz oben im Text, im Briefkopf, bei den Absenderzeilen im Adressfenster oder im Impressum.
+   - Typischerweise in der Nähe der Straße und Postleitzahl
    - Nutze den Eigennamen der Firma oder Behörde. Keine Rechtsformen wie GmbH, AG, e.V.
 
-3. DOKUMENTENTYP (Exakt 1 Wort):
-   - Wähle den zutreffendsten Typ aus: Rechnung, Gutschrift, Vertrag, Mahnung, Kündigung, Lohnabrechnung, Versicherungsschein, Bescheid, Brief, Quittung.
+3. DOKUMENTENTYP (Maximal 2-3 prägnante Wörter):
+   - Wähle den zutreffendsten Typ aus z.B.: Rechnung, Gutschrift, Vertrag, Mahnung, Kündigung, Lohnabrechnung, Versicherungsschein, Bescheid, Brief, Quittung. (nicht abschließende Liste)
+   - Wenn kein prägnanter Begriff zutreffend ist, eine kurze Inhaltsbeschreibung
    - Falls nichts passt, nutze "Dokument".
+   - Keine Leerzeichen ausgeben, sondern Wärter getrennt durch Bindestriche (normale hyphen)
 
 STRIKTE FORMATVORGABE:
 Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt. Verwende keine Markdown-Formatierung (keine ```json Blöcke). Keine Erklärungen vor oder nach dem JSON.
